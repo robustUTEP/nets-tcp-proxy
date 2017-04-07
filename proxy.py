@@ -1,0 +1,126 @@
+import sys
+import traceback
+from select import *
+from socket import *
+
+class Fwd:
+    def __init__(self, conn, inSock, outSock, bufCap = 1000):
+        self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
+        self.inClosed, self.buf = 0, ""
+    def checkRead(self):
+        if len(self.buf) < self.bufCap and not self.inClosed:
+            return self.inSock
+        else:
+            return None
+    def checkWrite(self):
+        if len(self.buf) > 0:
+            return self.outSock
+        else:
+            return None
+    def doRecv(self):
+        b = ""
+        try:
+            b = self.inSock.recv(self.bufCap - len(self.buf))
+        except:
+            self.conn.die()
+        if len(b):
+            buf += b
+        else:
+            self.inClosed = 1
+        self.checkDone()
+    def doSend(self):
+        try:
+            n = self.outSock.send(self.buf)
+            self.buf = self.buf[n:]
+        except:
+            self.conn.die()
+        self.checkDone()
+    def checkDone(self):
+        if len(self.buf) == 0 and self.inClosed:
+            self.conn.fwdDone(self)
+            
+    
+connections = set()
+
+class Conn:
+    def __init__(self, csock, caddr, af, socktype, saddr):
+        self.csock = csock      # to client
+        self.caddr, self.saddr = caddr, saddr # addresses
+        self.ssock = ssock = socket.socket(af, socktype)
+        ssock.setblocking(False)
+        ssock.connect(saddr)
+        self.fowarders = forwarders = set()
+        forwarders.add(Fwd(self, csock, ssock))
+        forwarders.add(Fwd(self, ssock, csock))
+        connections.add(self)
+    def fwdDone(self, forwarder):
+        forwarders = self.forwarders
+        forwarders.remove(forwarder)
+        print "one of the forwarders for client %s shutting down" % self.caddr
+        if len(fowarders) == 0:
+            self.die()
+    def die(self):
+        print "forwarder from client %s shutting down" % self.caddr
+        for s in self.ssock, self.csock:
+            try:
+                s.close()
+            except:
+                pass 
+        connections.remove(self)
+    def doErr(self):
+        print "forwarder from client %s failing due to error" % self.caddr
+        die()
+                
+class Listener:
+    def __init__(self, bindaddr, saddr, addrFamily=AF_INET, socktype=SOCK_STREAM): # saddr is address of server
+        self.bindaddr, self.saddr = bindaddr, saddr
+        self.addrFamily, self.socktype = addrFamily, socktype
+        self.lsock = lsock = socket(addrFamily, socktype)
+        lsock.bind(bindaddr)
+        lsock.setblocking(False)
+        lsock.listen(2)
+    def doRecv(self):
+        try:
+            csock, caddr = self.lsock.accept() # socket connected to client
+            print "new connection from client at addr %s" % caddr
+            conn = Conn(csock, self.caddr, self.addrFamily, self.socktype, self.saddr)
+        except:
+            print "weird.  listener readable but can't accept!"
+            traceback.print_exc(file=sys.stdout)
+    def doErr(self):
+        print "listener socket failed!!!!!"
+        sys.exit(2)
+
+    def checkRead(self):
+        return self.lsock
+    def checkWrite(self):
+        return None
+    def checkErr(self):
+        return self.lsock
+        
+
+l = Listener(("localhost", 50000), ("localhost", 50001))
+
+while 1:
+    rmap,wmap,xmap = {},{},{}   # socket:object mappings for select
+    xmap[l.checkErr()] = l
+    rmap[l.checkRead()] = l
+    for conn in connections:
+        for sock in conn.csock, conn.ssock:
+            xmap[sock] = conn
+            for fwd in conn.forwarders:
+                sock = fwd.checkRead()
+                if (r): rmap[sock] = fwd
+                sock = fwd.checkWrite()
+                if (r): wmap[sock] = fwd
+    rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),5)
+    print "select r=%s, w=%s, x=%s" % (rset,wset,xset)
+    for sock in rset:
+        rmap[sock].doRecv()
+    for sock in wset:
+        wmap[sock].doSend()
+    for sock in xset:
+        xmap[sock].doErr()
+
+    
+
