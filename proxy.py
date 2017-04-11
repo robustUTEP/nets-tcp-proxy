@@ -3,6 +3,9 @@ import traceback
 from select import *
 from socket import *
 
+sockNames = {}               # from socket to name
+nextConnectionNumber = 0     # each connection is assigned a unique id
+
 class Fwd:
     def __init__(self, conn, inSock, outSock, bufCap = 1000):
         self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
@@ -24,7 +27,7 @@ class Fwd:
         except:
             self.conn.die()
         if len(b):
-            buf += b
+            self.buf += b
         else:
             self.inClosed = 1
         self.checkDone()
@@ -37,6 +40,7 @@ class Fwd:
         self.checkDone()
     def checkDone(self):
         if len(self.buf) == 0 and self.inClosed:
+            self.outSock.shutdown(SHUT_WR)
             self.conn.fwdDone(self)
             
     
@@ -44,31 +48,38 @@ connections = set()
 
 class Conn:
     def __init__(self, csock, caddr, af, socktype, saddr):
+        global nextConnectionNumber
         self.csock = csock      # to client
         self.caddr, self.saddr = caddr, saddr # addresses
-        self.ssock = ssock = socket.socket(af, socktype)
+        self.connIndex = connIndex = nextConnectionNumber
+        nextConnectionNumber += 1
+        self.ssock = ssock = socket(af, socktype)
+        self.forwarders = forwarders = set()
+        print "New connection #%d from %s" % (connIndex, repr(caddr))
+        sockNames[csock] = "C%d:ToClient" % connIndex
+        sockNames[ssock] = "C%d:ToServer" % connIndex
         ssock.setblocking(False)
-        ssock.connect(saddr)
-        self.fowarders = forwarders = set()
+        ssock.connect_ex(saddr)
         forwarders.add(Fwd(self, csock, ssock))
         forwarders.add(Fwd(self, ssock, csock))
         connections.add(self)
     def fwdDone(self, forwarder):
         forwarders = self.forwarders
         forwarders.remove(forwarder)
-        print "one of the forwarders for client %s shutting down" % self.caddr
-        if len(fowarders) == 0:
+        print "forwarder %s ==> %s from connection %d shutting down" % (sockNames[forwarder.inSock], sockNames[forwarder.outSock], self.connIndex)
+        if len(forwarders) == 0:
             self.die()
     def die(self):
-        print "forwarder from client %s shutting down" % self.caddr
+        print "connection %d shutting down" % self.connIndex
         for s in self.ssock, self.csock:
+            del sockNames[s]
             try:
                 s.close()
             except:
                 pass 
         connections.remove(self)
     def doErr(self):
-        print "forwarder from client %s failing due to error" % self.caddr
+        print "forwarder from client %s failing due to error" % repr(self.caddr)
         die()
                 
 class Listener:
@@ -76,14 +87,15 @@ class Listener:
         self.bindaddr, self.saddr = bindaddr, saddr
         self.addrFamily, self.socktype = addrFamily, socktype
         self.lsock = lsock = socket(addrFamily, socktype)
+        sockNames[lsock] = "listener"
+        lsock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         lsock.bind(bindaddr)
         lsock.setblocking(False)
         lsock.listen(2)
     def doRecv(self):
         try:
             csock, caddr = self.lsock.accept() # socket connected to client
-            print "new connection from client at addr %s" % caddr
-            conn = Conn(csock, self.caddr, self.addrFamily, self.socktype, self.saddr)
+            conn = Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
         except:
             print "weird.  listener readable but can't accept!"
             traceback.print_exc(file=sys.stdout)
@@ -101,6 +113,9 @@ class Listener:
 
 l = Listener(("localhost", 50000), ("localhost", 50001))
 
+def lookupSocknames(socks):
+    return [ sockName(s) for s in socks ]
+
 while 1:
     rmap,wmap,xmap = {},{},{}   # socket:object mappings for select
     xmap[l.checkErr()] = l
@@ -110,11 +125,12 @@ while 1:
             xmap[sock] = conn
             for fwd in conn.forwarders:
                 sock = fwd.checkRead()
-                if (r): rmap[sock] = fwd
+                if (sock): rmap[sock] = fwd
                 sock = fwd.checkWrite()
-                if (r): wmap[sock] = fwd
-    rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),5)
-    print "select r=%s, w=%s, x=%s" % (rset,wset,xset)
+                if (sock): wmap[sock] = fwd
+    rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),60)
+    #print "select r=%s, w=%s, x=%s" %
+    print [ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ]
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:
