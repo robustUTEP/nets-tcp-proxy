@@ -4,9 +4,33 @@ import traceback
 from select import *
 from socket import *
 
+import re
+import params
+
+switchesVarDefaults = (
+    (('-s', '--server'), 'server', "127.0.0.1:50000"),
+    (('-d', '--debug'), "debug", False), # boolean (set if present)
+    (('-?', '--usage'), "usage", False) # boolean (set if present)
+    )
+
+paramMap = params.parseParams(switchesVarDefaults)
+server, usage, debug = paramMap["server"], paramMap["usage"], paramMap["debug"]
+
+
+if usage:
+    params.usage()
+
+try:
+    serverHost, serverPort = re.split(":", server)
+    serverPort = int(serverPort)
+except:
+    print "Can't parse server:port from '%s'" % server
+    sys.exit(1)
+
+
 sockNames = {}               # from socket to name
 nextClientNumber = 0     # each client is assigned a unique id
-debug = 0
+
             
     
 liveClients, deadClients = set(), set()
@@ -29,7 +53,11 @@ class Client:
         ssock.connect_ex(saddr)
         liveClients.add(self)
     def doSend(self):
-        self.numSent += self.ssock.send("a"*(random.randrange(1,2048)))
+        try:
+            self.numSent += self.ssock.send("a"*(random.randrange(1,2048)))
+        except Exception as e:
+            self.errorAbort("can't send: %s" % e)
+            return
         if random.randrange(0,200) == 0:
             self.allSent = 1
             self.ssock.shutdown(SHUT_WR)
@@ -74,8 +102,9 @@ class Client:
             pass
         print "client %d done (error=%d)" % (self.clientIndex, self.error)
         deadClients.add(self)
-        liveClients.remove(self)
-       
+        try: liveClients.remove(self)
+        except: pass
+            
     def errorAbort(self, msg):
         self.allSent =1
         self.error = 1
@@ -87,7 +116,7 @@ def lookupSocknames(socks):
     return [ sockName(s) for s in socks ]
 
 for i in range(4):
-    liveClients.add(Client(AF_INET, SOCK_STREAM, ("localhost", 50000)))
+    liveClients.add(Client(AF_INET, SOCK_STREAM, (serverHost, serverPort)))
 
 
 while len(liveClients):

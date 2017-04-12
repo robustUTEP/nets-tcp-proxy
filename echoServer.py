@@ -3,7 +3,26 @@ import traceback
 from select import *
 from socket import *
 
-debug = 0
+import re
+import params
+
+switchesVarDefaults = (
+    (('-l', '--listenPort') ,'listenPort', 50001),
+    (('-d', '--debug'), "debug", False), # boolean (set if present)
+    (('-?', '--usage'), "usage", False) # boolean (set if present)
+    )
+
+paramMap = params.parseParams(switchesVarDefaults)
+listenPort, usage, debug = paramMap["listenPort"], paramMap["usage"], paramMap["debug"]
+
+if usage:
+    params.usage()
+
+try:
+    listenPort = int(listenPort)
+except:
+    print "Can't parse listen port from %s" % listenPort
+    sys.exit(1)
 
 sockNames = {}               # from socket to name
 nextConnectionNumber = 0     # each connection is assigned a unique id
@@ -111,7 +130,7 @@ class Listener:
         return self.lsock
         
 
-l = Listener(("localhost", 50001))
+l = Listener(("0.0.0.0", listenPort))
 
 def lookupSocknames(socks):
     return [ sockName(s) for s in socks ]
