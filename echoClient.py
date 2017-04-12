@@ -9,12 +9,14 @@ import params
 
 switchesVarDefaults = (
     (('-s', '--server'), 'server', "127.0.0.1:50000"),
+    (('-n', '--numClients'), 'numClients', "4"),
     (('-d', '--debug'), "debug", False), # boolean (set if present)
     (('-?', '--usage'), "usage", False) # boolean (set if present)
     )
 
 paramMap = params.parseParams(switchesVarDefaults)
 server, usage, debug = paramMap["server"], paramMap["usage"], paramMap["debug"]
+numClients = int(paramMap["numClients"])
 
 
 if usage:
@@ -115,7 +117,7 @@ class Client:
 def lookupSocknames(socks):
     return [ sockName(s) for s in socks ]
 
-for i in range(4):
+for i in range(numClients):
     liveClients.add(Client(AF_INET, SOCK_STREAM, (serverHost, serverPort)))
 
 
