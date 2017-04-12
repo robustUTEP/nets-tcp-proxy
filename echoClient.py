@@ -29,15 +29,21 @@ class Client:
         ssock.connect_ex(saddr)
         liveClients.add(self)
     def doSend(self):
-        self.numSent += self.ssock.send("a"*random.randrange(1,2048))
+        self.numSent += self.ssock.send("a"*(random.randrange(1,2048)))
         if random.randrange(0,200) == 0:
             self.allSent = 1
             self.ssock.shutdown(SHUT_WR)
     def doRecv(self):
-        n = len(self.ssock.recv(1024))
+        try:
+            n = len(self.ssock.recv(1024))
+        except Exception as e:
+            print "doRecv on dead socket"
+            print e
+            self.done()
+            return
         self.numRecv += n
         if self.numRecv > self.numSent: 
-            self.error("sent=%d < recd=%d" %  (self.numSent, self.numRecv))
+            self.errorAbort("sent=%d < recd=%d" %  (self.numSent, self.numRecv))
         if n != 0:
             return
         if debug: print "client %d: zero length read" % self.clientIndex
@@ -45,8 +51,8 @@ class Client:
         if self.numRecv == self.numSent:
             self.done()
         else:
-            self.error("sent=%d but recd=%d" %  (self.numSent, self.numRecv))
-    def doErr(self):
+            self.errorAbort("sent=%d but recd=%d" %  (self.numSent, self.numRecv))
+    def doErr(self, msg=""):
         error("socket error")
     def checkWrite(self):
         if self.allSent:
@@ -60,7 +66,8 @@ class Client:
             return self.ssock
     def done(self):
         self.isDone = 1
-        self.allSent =1 
+        self.allSent =1
+        if self.numSent != self.numRecv: self.error = 1
         try:
             self.ssock(close)
         except:
@@ -69,7 +76,7 @@ class Client:
         deadClients.add(self)
         liveClients.remove(self)
        
-    def error(self, msg):
+    def errorAbort(self, msg):
         self.allSent =1
         self.error = 1
         print "FAILURE client %d: %s" % (self.clientIndex, msg)
@@ -95,12 +102,13 @@ while len(liveClients):
     rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),60)
     #print "select r=%s, w=%s, x=%s" %
     if debug: print "select returned (r,w,x):", [ repr([ sockNames[s] for s in sset] ) for sset in [rset,wset,xset] ]
+    for sock in xset:
+        xmap[sock].doErr()
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:
         wmap[sock].doSend()
-    for sock in xset:
-        xmap[sock].doErr()
+
 
 numFailed = 0
 for client in deadClients:

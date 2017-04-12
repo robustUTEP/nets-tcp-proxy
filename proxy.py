@@ -3,6 +3,35 @@ import traceback
 from select import *
 from socket import *
 
+import re
+import params
+
+switchesVarDefaults = (
+    (('-l', '--listenPort') ,'listenPort', 50000),
+    (('-s', '--server'), 'server', "127.0.0.1:50001"),
+    (('-d', '--debug'), "debug", False), # boolean (set if present)
+    (('-?', '--usage'), "usage", False) # boolean (set if present)
+    )
+
+paramMap = params.parseParams(switchesVarDefaults)
+server, listenPort, usage, debug = paramMap["server"], paramMap["listenPort"], paramMap["usage"], paramMap["debug"]
+
+if usage:
+    params.usage()
+
+try:
+    serverHost, serverPort = re.split(":", server)
+    serverPort = int(serverPort)
+except:
+    print "Can't parse server:port from '%s'" % server
+    sys.exit(1)
+
+try:
+    listenPort = int(listenPort)
+except:
+    print "Can't parse listen port from %s" % listenPort
+    sys.exit(1)
+
 sockNames = {}               # from socket to name
 nextConnectionNumber = 0     # each connection is assigned a unique id
 
@@ -26,9 +55,9 @@ class Fwd:
             b = self.inSock.recv(self.bufCap - len(self.buf))
         except:
             self.conn.die()
-        if len(b):
+        if len(b):              # read something
             self.buf += b
-        else:
+        else:                   # zero length read (input closed)
             self.inClosed = 1
         self.checkDone()
     def doSend(self):
@@ -53,13 +82,13 @@ class Conn:
         self.caddr, self.saddr = caddr, saddr # addresses
         self.connIndex = connIndex = nextConnectionNumber
         nextConnectionNumber += 1
-        self.ssock = ssock = socket(af, socktype)
+        self.ssock = ssock = socket(af, socktype) #  socket to connect to server
         self.forwarders = forwarders = set()
         print "New connection #%d from %s" % (connIndex, repr(caddr))
         sockNames[csock] = "C%d:ToClient" % connIndex
         sockNames[ssock] = "C%d:ToServer" % connIndex
         ssock.setblocking(False)
-        ssock.connect_ex(saddr)
+        ssock.connect_ex(saddr) # start connecting
         forwarders.add(Fwd(self, csock, ssock))
         forwarders.add(Fwd(self, ssock, csock))
         connections.add(self)
@@ -111,7 +140,7 @@ class Listener:
         return self.lsock
         
 
-l = Listener(("localhost", 50000), ("localhost", 50001))
+l = Listener(("0.0.0.0", listenPort), (serverHost, serverPort))
 
 def lookupSocknames(socks):
     return [ sockName(s) for s in socks ]
@@ -130,7 +159,7 @@ while 1:
                 if (sock): wmap[sock] = fwd
     rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),60)
     #print "select r=%s, w=%s, x=%s" %
-    print [ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ]
+    if debug: print [ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ]
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:
