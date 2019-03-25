@@ -23,13 +23,13 @@ try:
     serverHost, serverPort = re.split(":", server)
     serverPort = int(serverPort)
 except:
-    print "Can't parse server:port from '%s'" % server
+    print("Can't parse server:port from '%s'" % server)
     sys.exit(1)
 
 try:
     listenPort = int(listenPort)
 except:
-    print "Can't parse listen port from %s" % listenPort
+    print("Can't parse listen port from %s" % listenPort)
     sys.exit(1)
 
 sockNames = {}               # from socket to name
@@ -38,7 +38,7 @@ nextConnectionNumber = 0     # each connection is assigned a unique id
 class Fwd:
     def __init__(self, conn, inSock, outSock, bufCap = 1000):
         self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
-        self.inClosed, self.buf = 0, ""
+        self.inClosed, self.buf = 0, b""
     def checkRead(self):
         if len(self.buf) < self.bufCap and not self.inClosed:
             return self.inSock
@@ -71,8 +71,8 @@ class Fwd:
         if len(self.buf) == 0 and self.inClosed:
             self.outSock.shutdown(SHUT_WR)
             self.conn.fwdDone(self)
-            
-    
+
+
 connections = set()
 
 class Conn:
@@ -84,7 +84,7 @@ class Conn:
         nextConnectionNumber += 1
         self.ssock = ssock = socket(af, socktype) #  socket to connect to server
         self.forwarders = forwarders = set()
-        print "New connection #%d from %s" % (connIndex, repr(caddr))
+        print("New connection #%d from %s" % (connIndex, repr(caddr)))
         sockNames[csock] = "C%d:ToClient" % connIndex
         sockNames[ssock] = "C%d:ToServer" % connIndex
         ssock.setblocking(False)
@@ -95,22 +95,22 @@ class Conn:
     def fwdDone(self, forwarder):
         forwarders = self.forwarders
         forwarders.remove(forwarder)
-        print "forwarder %s ==> %s from connection %d shutting down" % (sockNames[forwarder.inSock], sockNames[forwarder.outSock], self.connIndex)
+        print("forwarder %s ==> %s from connection %d shutting down" % (sockNames[forwarder.inSock], sockNames[forwarder.outSock], self.connIndex))
         if len(forwarders) == 0:
             self.die()
     def die(self):
-        print "connection %d shutting down" % self.connIndex
+        print("connection %d shutting down" % self.connIndex)
         for s in self.ssock, self.csock:
             del sockNames[s]
             try:
                 s.close()
             except:
-                pass 
+                pass
         connections.remove(self)
     def doErr(self):
-        print "forwarder from client %s failing due to error" % repr(self.caddr)
-        die()
-                
+        print("forwarder from client %s failing due to error" % repr(self.caddr))
+        self.die()
+
 class Listener:
     def __init__(self, bindaddr, saddr, addrFamily=AF_INET, socktype=SOCK_STREAM): # saddr is address of server
         self.bindaddr, self.saddr = bindaddr, saddr
@@ -126,10 +126,10 @@ class Listener:
             csock, caddr = self.lsock.accept() # socket connected to client
             conn = Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
         except:
-            print "weird.  listener readable but can't accept!"
+            print("weird.  listener readable but can't accept!")
             traceback.print_exc(file=sys.stdout)
     def doErr(self):
-        print "listener socket failed!!!!!"
+        print("listener socket failed!!!!!")
         sys.exit(2)
 
     def checkRead(self):
@@ -138,12 +138,12 @@ class Listener:
         return None
     def checkErr(self):
         return self.lsock
-        
+
 
 l = Listener(("0.0.0.0", listenPort), (serverHost, serverPort))
 
 def lookupSocknames(socks):
-    return [ sockName(s) for s in socks ]
+    return [ sockNames[s] for s in socks ]
 
 while 1:
     rmap,wmap,xmap = {},{},{}   # socket:object mappings for select
@@ -157,15 +157,12 @@ while 1:
                 if (sock): rmap[sock] = fwd
                 sock = fwd.checkWrite()
                 if (sock): wmap[sock] = fwd
-    rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),60)
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()),60)
     #print "select r=%s, w=%s, x=%s" %
-    if debug: print [ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ]
+    if debug: print([ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ])
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:
         wmap[sock].doSend()
     for sock in xset:
         xmap[sock].doErr()
-
-    
-

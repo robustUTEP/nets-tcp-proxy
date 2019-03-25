@@ -27,17 +27,16 @@ def parseParams(_switchesVarDefaults):
             else:
                 paramMap[paramVar] = True
     except Exception as e:
-        print "Problem parsing parameters (exception=%s)" % e
+        print("Problem parsing parameters (exception=%s)" % e)
         usage()
     return paramMap
-        
+
 def usage():
-    print "%s usage:" % progName
+    print("%s usage:" % progName)
     for switches, param, default in switchesVarDefaults:
         for sw in switches:
             if default:
-                print " [%s %s]   (default = %s)" % (sw, param, default)
+                print(" [%s %s]   (default = %s)" % (sw, param, default))
             else:
-                print " [%s]   (%s if present)" % (sw, param)
+                print(" [%s]   (%s if present)" % (sw, param))
     sys.exit(1)
-

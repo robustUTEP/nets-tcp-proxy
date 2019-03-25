@@ -25,13 +25,13 @@ try:
     serverHost, serverPort = re.split(":", server)
     serverPort = int(serverPort)
 except:
-    print "Can't parse server:port from '%s'" % server
+    print("Can't parse server:port from '%s'" % server)
     sys.exit(1)
 
 try:
     listenPort = int(listenPort)
 except:
-    print "Can't parse listen port from %s" % listenPort
+    print("Can't parse listen port from %s" % listenPort)
     sys.exit(1)
 
 
@@ -42,9 +42,9 @@ now = time.time()
 
 class Fwd:
     def __init__(self, conn, inSock, outSock, bufCap = 1000):
-        global now
+        global now, xmap
         self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
-        self.inClosed, self.buf = 0, ""
+        self.inClosed, self.buf = 0, b""
         self.delaySendUntil = 0 # no delay
     def checkRead(self):
         if len(self.buf) < self.bufCap and not self.inClosed:
@@ -57,7 +57,7 @@ class Fwd:
         else:
             return None
     def doRecv(self):
-        b = ""
+        b = b""
         try:
             b = self.inSock.recv(self.bufCap - len(self.buf))
         except:
@@ -72,21 +72,44 @@ class Fwd:
         try:
             bufLen = len(self.buf)
             toSend = random.randrange(1, bufLen+1)
-            if debug: print "attempting to send %d of %d" % (toSend, len(self.buf))
+            if debug: print("attempting to send %d of %d" % (toSend, len(self.buf)))
             n = self.outSock.send(self.buf[0:toSend])
             self.buf = self.buf[n:]
             if len(self.buf):
                 self.delaySendUntil = now + 0.1
         except Exception as e:
-            print e
+            print(e)
             self.conn.die()
         self.checkDone()
     def checkDone(self):
         if len(self.buf) == 0 and self.inClosed:
-            self.outSock.shutdown(SHUT_WR)
+            try:
+                self.outSock.shutdown(SHUT_WR)
+            except Exception as e:
+                print("%s: shutting down %s for writing" % (e, self.outSock))
+    def doErr(self, sock):
+        if sock == self.inSock:
+            if not self.inClosed:
+                print("forwarder notified that input socket %s died prior to shutdown!", sockNames[sock])
+                self.inClosed = True
+            if len(self.buf) != 0:
+                if debug:
+                    print("forwarder notified that input socket %s died, still draining to %s. (not an error)" % (sockNames[self.inSock], sockNames[self.outSock]))
+            self.checkDone()
+        else:                   # outsock
+            if len(self.buf) != 0:
+                print("Forwarder's outsock %s died prior to draining data from insock %s.", (sockNames[self.outSock], sockNames[self.inSock]))
+                self.buf = b"" # clear output buffer (nothing more to send)
+            elif not self.inClosed:
+                if debug:
+                    print("Forwarder's outsock died before its insock %s shutdown.(drained, so no error)", (sockNames[self.outSock], sockNames[self.inSock]))
+            try:
+                self.outSock.shutdown(SHUT_WR)
+            except Exception as e:
+                print("%s: shutting down %s for writing" % (e, self.outSock))
             self.conn.fwdDone(self)
-            
-    
+
+
 connections = set()
 
 class Conn:
@@ -98,7 +121,7 @@ class Conn:
         nextConnectionNumber += 1
         self.ssock = ssock = socket(af, socktype)
         self.forwarders = forwarders = set()
-        print "New connection #%d from %s" % (connIndex, repr(caddr))
+        print("New connection #%d from %s" % (connIndex, repr(caddr)))
         sockNames[csock] = "C%d:ToClient" % connIndex
         sockNames[ssock] = "C%d:ToServer" % connIndex
         ssock.setblocking(False)
@@ -109,22 +132,26 @@ class Conn:
     def fwdDone(self, forwarder):
         forwarders = self.forwarders
         forwarders.remove(forwarder)
-        print "forwarder %s ==> %s from connection %d shutting down" % (sockNames[forwarder.inSock], sockNames[forwarder.outSock], self.connIndex)
+        print("forwarder %s ==> %s from connection %d shutting down" % (sockNames[forwarder.inSock], sockNames[forwarder.outSock], self.connIndex))
         if len(forwarders) == 0:
             self.die()
     def die(self):
-        print "connection %d shutting down" % self.connIndex
+        print("connection %d shutting down" % self.connIndex)
         for s in self.ssock, self.csock:
             del sockNames[s]
             try:
                 s.close()
             except:
-                pass 
+                pass
         connections.remove(self)
-    def doErr(self):
-        print "forwarder from client %s failing due to error" % repr(self.caddr)
-        die()
-                
+    def doErr(self, sock):
+        for f in self.forwarders:
+            f.doErr(sock)
+
+
+        print("forwarder from client %s failing due to error" % repr(self.caddr))
+        self.die()
+
 class Listener:
     def __init__(self, bindaddr, saddr, addrFamily=AF_INET, socktype=SOCK_STREAM): # saddr is address of server
         self.bindaddr, self.saddr = bindaddr, saddr
@@ -140,10 +167,10 @@ class Listener:
             csock, caddr = self.lsock.accept() # socket connected to client
             conn = Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
         except:
-            print "weird.  listener readable but can't accept!"
+            print("weird.  listener readable but can't accept!")
             traceback.print_exc(file=sys.stdout)
     def doErr(self):
-        print "listener socket failed!!!!!"
+        print("listener socket failed!!!!!")
         sys.exit(2)
 
     def checkRead(self):
@@ -152,12 +179,12 @@ class Listener:
         return None
     def checkErr(self):
         return self.lsock
-        
+
 
 l = Listener(("0.0.0.0", listenPort), (serverHost, serverPort))
 
 def lookupSocknames(socks):
-    return [ sockName(s) for s in socks ]
+    return [ sockNames[s] for s in socks ]
 
 while 1:
     rmap,wmap,xmap = {},{},{}   # socket:object mappings for select
@@ -177,15 +204,12 @@ while 1:
                 if (delayUntil < nextDelayUntil and delayUntil > now): # minimum active delay
                     nextDelayUntil = delayUntil
     delay = nextDelayUntil - now
-    if debug: print "delay=%f" % delay
-    rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(), delay)
-    if debug: print [ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ]
+    if debug: print("delay=%f" % delay)
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()), delay)
+    if debug: print([ repr([ sockNames[s] for s in sset]) for sset in [rset,wset,xset] ])
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:
         wmap[sock].doSend()
     for sock in xset:
-        xmap[sock].doErr()
-
-    
-
+        xmap[sock].doErr(sock)

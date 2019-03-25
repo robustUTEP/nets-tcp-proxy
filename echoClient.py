@@ -26,15 +26,15 @@ try:
     serverHost, serverPort = re.split(":", server)
     serverPort = int(serverPort)
 except:
-    print "Can't parse server:port from '%s'" % server
+    print("Can't parse server:port from '%s'" % server)
     sys.exit(1)
 
 
 sockNames = {}               # from socket to name
 nextClientNumber = 0     # each client is assigned a unique id
 
-            
-    
+
+
 liveClients, deadClients = set(), set()
 
 class Client:
@@ -49,14 +49,15 @@ class Client:
         self.clientIndex = clientIndex = nextClientNumber
         nextClientNumber += 1
         self.ssock = ssock = socket(af, socktype)
-        print "New client #%d to %s" % (clientIndex, repr(saddr))
+        print("New client #%d to %s" % (clientIndex, repr(saddr)))
         sockNames[ssock] = "C%d:ToServer" % clientIndex
         ssock.setblocking(False)
         ssock.connect_ex(saddr)
         liveClients.add(self)
     def doSend(self):
         try:
-            self.numSent += self.ssock.send("a"*(random.randrange(1,2048)))
+            bytesToSend = ("a"* random.randrange(1,2048)).encode()
+            self.numSent += self.ssock.send(bytesToSend)
         except Exception as e:
             self.errorAbort("can't send: %s" % e)
             return
@@ -67,16 +68,16 @@ class Client:
         try:
             n = len(self.ssock.recv(1024))
         except Exception as e:
-            print "doRecv on dead socket"
-            print e
+            print("doRecv on dead socket")
+            print(e)
             self.done()
             return
         self.numRecv += n
-        if self.numRecv > self.numSent: 
+        if self.numRecv > self.numSent:
             self.errorAbort("sent=%d < recd=%d" %  (self.numSent, self.numRecv))
         if n != 0:
             return
-        if debug: print "client %d: zero length read" % self.clientIndex
+        if debug: print("client %d: zero length read" % self.clientIndex)
         # zero length read (done)
         if self.numRecv == self.numSent:
             self.done()
@@ -99,23 +100,23 @@ class Client:
         self.allSent =1
         if self.numSent != self.numRecv: self.error = 1
         try:
-            self.ssock(close)
+            self.ssock.close()
         except:
             pass
-        print "client %d done (error=%d)" % (self.clientIndex, self.error)
+        print("client %d done (error=%d)" % (self.clientIndex, self.error))
         deadClients.add(self)
         try: liveClients.remove(self)
         except: pass
-            
+
     def errorAbort(self, msg):
         self.allSent =1
         self.error = 1
-        print "FAILURE client %d: %s" % (self.clientIndex, msg)
+        print("FAILURE client %d: %s" % (self.clientIndex, msg))
         self.done()
-        
-                  
+
+
 def lookupSocknames(socks):
-    return [ sockName(s) for s in socks ]
+    return [ sockNames[s] for s in socks ]
 
 for i in range(numClients):
     liveClients.add(Client(AF_INET, SOCK_STREAM, (serverHost, serverPort)))
@@ -129,10 +130,10 @@ while len(liveClients):
         sock = client.checkWrite()
         if (sock): wmap[sock] = client
         xmap[client.ssock] = client
-    if debug: print "select params (r,w,x):", [ repr([ sockNames[s] for s in sset] ) for sset in [rmap.keys(), wmap.keys(), xmap.keys()] ]
-    rset, wset, xset = select(rmap.keys(), wmap.keys(), xmap.keys(),60)
+    if debug: print("select params (r,w,x):", [ repr([ sockNames[s] for s in sset] ) for sset in [list(rmap.keys()), list(wmap.keys()), list(xmap.keys())] ])
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()),60)
     #print "select r=%s, w=%s, x=%s" %
-    if debug: print "select returned (r,w,x):", [ repr([ sockNames[s] for s in sset] ) for sset in [rset,wset,xset] ]
+    if debug: print("select returned (r,w,x):", [ repr([ sockNames[s] for s in sset] ) for sset in [rset,wset,xset] ])
     for sock in xset:
         xmap[sock].doErr()
     for sock in rset:
@@ -144,8 +145,7 @@ while len(liveClients):
 numFailed = 0
 for client in deadClients:
     err = client.error
-    print "Client %d Succeeded=%s, Bytes sent=%d, rec'd=%d" % (client.clientIndex, not err, client.numSent, client.numRecv)
+    print("Client %d Succeeded=%s, Bytes sent=%d, rec'd=%d" % (client.clientIndex, not err, client.numSent, client.numRecv))
     if err:
         numFailed += 1
-print "%d Clients failed." % numFailed
-
+print("%d Clients failed." % numFailed)
