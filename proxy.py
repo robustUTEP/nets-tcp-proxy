@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import re
 from select import select
 from socket import (AF_INET, SHUT_WR, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET,
@@ -27,13 +28,13 @@ try:
     serverHost, serverPort = re.split(":", server)
     serverPort = int(serverPort)
 except:
-    print(f"Can't parse server:port from {repr(server)}")
+    print(f"Can't parse server:port from {server}")
     sys.exit(1)
 
 try:
     listenPort = int(listenPort)
 except:
-    print(f"Can't parse listen port from {repr(listenPort)}")
+    print(f"Can't parse listen port from {listenPort}")
     sys.exit(1)
 
 sockNames = {}               # from socket to name
@@ -97,8 +98,8 @@ class Conn:
         self.ssock = ssock = socket(af, socktype) # socket to connect to server
         self.forwarders = forwarders = set()
         print(f"New connection #{connIndex} from {caddr}")
-        sockNames[csock] = f"C{connIndex}:ToClient"
-        sockNames[ssock] = f"C{connIndex}:ToServer"
+        sockNames[csock] = f"ToClnt.{connIndex}"
+        sockNames[ssock] = f"ToSrvr.{connIndex}"
         ssock.setblocking(False)
         ssock.connect_ex(saddr)  # start connecting
         forwarders.add(Fwd(self, csock, ssock))
@@ -122,7 +123,8 @@ class Conn:
             del sockNames[s]
             try:
                 s.close()
-            except:
+            except Exception as e:
+                print(f"close exception {e}")
                 pass
         connections.remove(self)
 
@@ -190,7 +192,8 @@ while 1:
     # print "select r=%s, w=%s, x=%s" %
     if debug:
         print(
-            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            "ready sockets: ",
+            [[sockNames[s] for s in sset] for sset in [rset, wset, xset]]
             )
     for sock in rset:
         rmap[sock].doRecv()

@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import re
 import random
 from select import select
@@ -29,13 +30,13 @@ try:
     serverHost, serverPort = re.split(":", server)
     serverPort = int(serverPort)
 except:
-    print(f"Can't parse server:port from {repr(server)}")
+    print(f"Can't parse server:port from {server!r}")
     sys.exit(1)
 
 try:
     listenPort = int(listenPort)
 except:
-    print(f"Can't parse listen port from {repr(listenPort)}")
+    print(f"Can't parse listen port from {listenPort}")
     sys.exit(1)
 
 
@@ -152,8 +153,8 @@ class Conn:
         self.ssock = ssock = socket(af, socktype)
         self.forwarders = forwarders = set()
         print(f"New connection #{connIndex} from {caddr}")
-        sockNames[csock] = f"C{connIndex}:ToClient"
-        sockNames[ssock] = f"C{connIndex}:ToServer"
+        sockNames[csock] = f"ToClnt.{connIndex}"
+        sockNames[ssock] = f"ToSrvr.{connIndex}"
         ssock.setblocking(False)
         ssock.connect_ex(saddr)
         forwarders.add(Fwd(self, csock, ssock))
@@ -256,7 +257,8 @@ while 1:
                               list(xmap.keys()), delay)
     if debug:
         print(
-            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            "ready sockets: ",
+            [[sockNames[s] for s in sset] for sset in [rset, wset, xset]]
             )
     for sock in rset:
         rmap[sock].doRecv()

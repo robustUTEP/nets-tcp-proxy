@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import re
 from select import select
 from socket import (AF_INET, SHUT_WR, SO_REUSEADDR, SOCK_STREAM, SOL_SOCKET,
@@ -24,7 +25,7 @@ if usage:
 try:
     listenPort = int(listenPort)
 except:
-    print(f"Can't parse listen port from {repr(listenPort)}")
+    print(f"Can't parse listen port from {listenPort}")
     sys.exit(1)
 
 sockNames = {}            # from socket to name
@@ -89,8 +90,8 @@ class Conn:
         self.connIndex = connIndex = nextConnectionNumber
         nextConnectionNumber += 1
         self.forwarders = forwarders = set()
-        print(f"New connection #{connIndex} from {caddr}")
-        sockNames[csock] = f"C{connIndex}:ToClient"
+        sockName = sockNames[csock] = f"S.{connIndex}"
+        print(f"New connection {sockName} from {caddr}")
         forwarders.add(Fwd(self, csock, csock))
         connections.add(self)
 
@@ -176,7 +177,8 @@ while 1:
                               list(xmap.keys()), 60)
     if debug:
         print(
-            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            "ready sockets: ",
+            [[sockNames[s] for s in sset] for sset in [rset, wset, xset]]
             )
     for sock in rset:
         rmap[sock].doRecv()

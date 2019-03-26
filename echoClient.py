@@ -1,3 +1,4 @@
+#! /usr/bin/env python3
 import random
 import re
 from select import select
@@ -25,7 +26,7 @@ try:
     serverHost, serverPort = re.split(":", server)
     serverPort = int(serverPort)
 except:
-    print(f"Can't parse server:port from {repr(server)}")
+    print(f"Can't parse server:port from {server}")
     sys.exit(1)
 
 
@@ -48,8 +49,8 @@ class Client:
         self.clientIndex = clientIndex = nextClientNumber
         nextClientNumber += 1
         self.ssock = ssock = socket(af, socktype)
-        print(f"New client #{clientIndex} to {saddr}")
-        sockNames[ssock] = f"C{clientIndex}:ToServer"
+        sockName = sockNames[ssock] = f"C.{clientIndex}"
+        print(f"New client {sockName} to {saddr}")
         ssock.setblocking(False)
         ssock.connect_ex(saddr)
         liveClients.add(self)
@@ -106,7 +107,8 @@ class Client:
             self.error = 1
         try:
             self.ssock.close()
-        except:
+        except Exception as e:
+            print(f"close exception {e}")
             pass
         print(f"Client {self.clientIndex} done (error={self.error})")
         deadClients.add(self)
@@ -142,7 +144,7 @@ while len(liveClients):
     if debug:
         print(
             "select params (r,w,x):",
-            [repr([sockNames[s] for s in sset]) for sset in [
+            [[sockNames[s] for s in sset] for sset in [
                 list(rmap.keys()),
                 list(wmap.keys()),
                 list(xmap.keys()),
@@ -152,8 +154,8 @@ while len(liveClients):
                               list(xmap.keys()), 60)
     if debug:
         print(
-            "select returned (r,w,x):",
-            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            "ready sockets: ",
+            [[sockNames[s] for s in sset] for sset in [rset, wset, xset]]
             )
     for sock in xset:
         xmap[sock].doErr()
