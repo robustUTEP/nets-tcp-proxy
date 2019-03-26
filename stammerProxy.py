@@ -82,11 +82,12 @@ class Fwd:
         global now
         try:
             bufLen = len(self.buf)
+            # attempt to send random-length fragment from beginning of buffer
             toSend = random.randrange(1, bufLen+1)
             if debug:
                 print(f"Attempting to send {toSend} of {len(self.buf)}")
             n = self.outSock.send(self.buf[0:toSend])
-            self.buf = self.buf[n:]
+            self.buf = self.buf[n:] # delete the fragment that was successfully enqueued for transmission
             if len(self.buf):
                 self.delaySendUntil = now + 0.1
         except Exception as e:

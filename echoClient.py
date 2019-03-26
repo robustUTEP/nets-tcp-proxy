@@ -55,17 +55,17 @@ class Client:
         ssock.connect_ex(saddr)
         liveClients.add(self)
 
-    def doSend(self):
-        try:
+    def doSend(self):           # called when socket is writable
+        try:                    # send random length string 
             self.numSent += self.ssock.send(b"a" * random.randrange(1, 2048))
         except Exception as e:
             self.errorAbort(f"Can't send: {e}")
             return
-        if random.randrange(0, 200) == 0:
+        if random.randrange(0, 200) == 0: # flip coin to determine when done sending
             self.allSent = 1
-            self.ssock.shutdown(SHUT_WR)
+            self.ssock.shutdown(SHUT_WR) # tell socket that there is no more to send
 
-    def doRecv(self):
+    def doRecv(self):           # called when socket is readable
         try:
             n = len(self.ssock.recv(1024))
         except Exception as e:
@@ -75,31 +75,32 @@ class Client:
         self.numRecv += n
         if self.numRecv > self.numSent:
             self.errorAbort(f"sent={self.numSent} < recd={self.numRecv}")
-        if n != 0:
+        if n != 0:              # non-empty read indicates that socket output is still live
             return
         if debug:
-            print(f"Client {self.clientIndex}: zero length read")
+            print(f"Client {self.clientIndex}: zero length read (socket output shutdown)")
         # zero length read (done)
         if self.numRecv == self.numSent:
             self.done()
         else:
-            self.errorAbort(f"sent={self.numSent} but recd={self.numRecv}")
+            self.errorAbort(f"socket output shutdown but sent={self.numSent} > recd={self.numRecv}")
 
-    def doErr(self):
+    def doErr(self):            # called when socket fails
         self.errorAbort("Socket error")
 
+        # sockets to give select
     def checkWrite(self):
         if self.allSent:
             return None
         else:
             return self.ssock
-
     def checkRead(self):
         if self.isDone:
             return None
         else:
             return self.ssock
 
+        # call when done
     def done(self):
         self.isDone = 1
         self.allSent = 1

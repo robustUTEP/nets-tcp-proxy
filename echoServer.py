@@ -120,7 +120,7 @@ class Conn:
         self.die()
 
 
-class Listener:
+class Listener:                 # a listener socket is a factory for established connections
     def __init__(self, bindaddr, addrFamily=AF_INET, socktype=SOCK_STREAM):
         self.bindaddr = bindaddr
         self.addrFamily, self.socktype = addrFamily, socktype
@@ -154,10 +154,6 @@ class Listener:
 
 
 l = Listener(("0.0.0.0", listenPort))
-
-
-def lookupSocknames(socks):
-    return [sockNames[s] for s in socks]
 
 while 1:
     rmap, wmap, xmap = {}, {}, {}  # socket:object mappings for select

@@ -60,7 +60,7 @@ class Fwd:
             return None
 
     def doRecv(self):
-        b = ""
+        b = b""
         try:
             b = self.inSock.recv(self.bufCap - len(self.buf))
         except:
