@@ -14,7 +14,9 @@ switchesVarDefaults = (
     )
 
 paramMap = params.parseParams(switchesVarDefaults)
-listenPort, usage, debug = paramMap['listenPort'], paramMap['usage'], paramMap['debug']
+listenPort = paramMap['listenPort']
+usage = paramMap['usage']
+debug = paramMap['debug']
 
 if usage:
     params.usage()
@@ -31,7 +33,8 @@ nextConnectionNumber = 0  # each connection is assigned a unique id
 
 class Fwd:
     def __init__(self, conn, inSock, outSock, bufCap=1000):
-        self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
+        self.inSock, self.outSock = inSock, outSock
+        self.conn, self.bufCap = conn, bufCap
         self.inClosed, self.buf = 0, b""
 
     def checkRead(self):
@@ -94,7 +97,11 @@ class Conn:
     def fwdDone(self, forwarder):
         forwarders = self.forwarders
         forwarders.remove(forwarder)
-        print(f"Forwarder {sockNames[forwarder.inSock]} ==> {sockNames[forwarder.outSock]} from connection {self.connIndex} shutting down")
+        print(
+            f"Forwarder {sockNames[forwarder.inSock]} ==>",
+            f"{sockNames[forwarder.outSock]} from connection {self.connIndex}",
+            "shutting down",
+            )
         if len(forwarders) == 0:
             self.die()
 
@@ -126,7 +133,7 @@ class Listener:
     def doRecv(self):
         try:
             csock, caddr = self.lsock.accept()  # socket connected to client
-            conn = Conn(csock, caddr)
+            Conn(csock, caddr)
         except:
             print("Weird, listener readable but can't accept!")
             traceback.print_exc(file=sys.stdout)
@@ -165,9 +172,12 @@ while 1:
                 sock = fwd.checkWrite()
                 if (sock):
                     wmap[sock] = fwd
-    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()), 60)
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()),
+                              list(xmap.keys()), 60)
     if debug:
-        print([repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]])
+        print(
+            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            )
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:

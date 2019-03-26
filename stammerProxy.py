@@ -17,7 +17,10 @@ switchesVarDefaults = (
     )
 
 paramMap = params.parseParams(switchesVarDefaults)
-server, listenPort, usage, debug = paramMap['server'], paramMap['listenPort'], paramMap['usage'], paramMap['debug']
+server = paramMap['server']
+listenPort = paramMap['listenPort']
+usage = paramMap['usage']
+debug = paramMap['debug']
 
 if usage:
     params.usage()
@@ -45,7 +48,8 @@ now = time.time()
 class Fwd:
     def __init__(self, conn, inSock, outSock, bufCap=1000):
         global now, xmap
-        self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
+        self.inSock, self.outSock = inSock, outSock
+        self.conn, self.bufCap = conn, bufCap
         self.inClosed, self.buf = 0, b""
         self.delaySendUntil = 0  # no delay
 
@@ -99,20 +103,35 @@ class Fwd:
     def doErr(self, sock):
         if sock == self.inSock:
             if not self.inClosed:
-                print(f"Forwarder notified that input socket {sockNames[sock]} died prior to shutdown!")
+                print(
+                    f"Forwarder notified that input socket {sockNames[sock]}",
+                    "died prior to shutdown!",
+                    )
                 self.inClosed = True
             if len(self.buf) != 0:
                 if debug:
-                    print(f"[Info] Forwarder notified that input socket {sockNames[self.inSock]} died, still draining to {sockNames[self.outSock]}")
+                    print(
+                        "[Info] Forwarder notified that input socket",
+                        f"{sockNames[self.inSock]} died, still draining",
+                        f"to {sockNames[self.outSock]}",
+                        )
             self.checkDone()
 
         else:                   # outsock
             if len(self.buf) != 0:
-                print(f"Forwarder's outSock {sockNames[self.outSock]} died prior to draining data from inSock {sockNames[self.inSock]}.", (sockNames[self.outSock], sockNames[self.inSock]))
+                print(
+                    f"Forwarder's outSock {sockNames[self.outSock]} died",
+                    "prior to draining data from",
+                    f"inSock {sockNames[self.inSock]}",
+                    )
                 self.buf = b""  # clear output buffer (nothing more to send)
             elif not self.inClosed:
                 if debug:
-                    print(f"[Info] Forwarder's outSock {sockNames[self.outSock]} died before its inSock {sockNames[self.inSock]} shutdown")
+                    print(
+                        f"[Info] Forwarder's outSock {sockNames[self.outSock]}",
+                        f"died before its inSock {sockNames[self.inSock]}",
+                        "shutdown",
+                        )
             try:
                 self.outSock.shutdown(SHUT_WR)
             except Exception as e:
@@ -144,7 +163,11 @@ class Conn:
     def fwdDone(self, forwarder):
         forwarders = self.forwarders
         forwarders.remove(forwarder)
-        print(f"Forwarder {sockNames[forwarder.inSock]} ==> {sockNames[forwarder.outSock]} from connection {self.connIndex} shutting down")
+        print(
+            f"Forwarder {sockNames[forwarder.inSock]} ==>",
+            f"{sockNames[forwarder.outSock]} from connection",
+            f"{self.connIndex} shutting down",
+            )
         if len(forwarders) == 0:
             self.die()
 
@@ -167,7 +190,8 @@ class Conn:
 
 
 class Listener:
-    def __init__(self, bindaddr, saddr, addrFamily=AF_INET, socktype=SOCK_STREAM):  # saddr is address of server
+    def __init__(self, bindaddr, saddr, addrFamily=AF_INET,
+                 socktype=SOCK_STREAM):  # saddr is address of server
         self.bindaddr, self.saddr = bindaddr, saddr
         self.addrFamily, self.socktype = addrFamily, socktype
         self.lsock = lsock = socket(addrFamily, socktype)
@@ -180,7 +204,7 @@ class Listener:
     def doRecv(self):
         try:
             csock, caddr = self.lsock.accept()  # socket connected to client
-            conn = Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
+            Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
         except:
             print("Weird, listener readable but can't accept!")
             traceback.print_exc(file=sys.stdout)
@@ -222,14 +246,18 @@ while 1:
                 if (sock):
                     wmap[sock] = fwd
                 delayUntil = fwd.delaySendUntil
-                if (delayUntil < nextDelayUntil and delayUntil > now):  # minimum active delay
+                if (delayUntil < nextDelayUntil and delayUntil > now):
+                    # minimum active delay
                     nextDelayUntil = delayUntil
     delay = nextDelayUntil - now
     if debug:
         print(f"delay={delay}")
-    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()), delay)
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()),
+                              list(xmap.keys()), delay)
     if debug:
-        print([repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]])
+        print(
+            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            )
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:

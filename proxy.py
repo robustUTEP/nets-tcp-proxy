@@ -15,7 +15,10 @@ switchesVarDefaults = (
     )
 
 paramMap = params.parseParams(switchesVarDefaults)
-server, listenPort, usage, debug = paramMap['server'], paramMap['listenPort'], paramMap['usage'], paramMap['debug']
+server = paramMap['server']
+listenPort = paramMap['listenPort']
+usage = paramMap['usage']
+debug = paramMap['debug']
 
 if usage:
     params.usage()
@@ -39,7 +42,8 @@ nextConnectionNumber = 0     # each connection is assigned a unique id
 
 class Fwd:
     def __init__(self, conn, inSock, outSock, bufCap=1000):
-        self.conn, self.inSock, self.outSock, self.bufCap = conn, inSock, outSock, bufCap
+        self.inSock, self.outSock = inSock, outSock
+        self.conn, self.bufCap = conn, bufCap
         self.inClosed, self.buf = 0, b""
 
     def checkRead(self):
@@ -90,7 +94,7 @@ class Conn:
         self.caddr, self.saddr = caddr, saddr  # addresses
         self.connIndex = connIndex = nextConnectionNumber
         nextConnectionNumber += 1
-        self.ssock = ssock = socket(af, socktype)  # socket to connect to server
+        self.ssock = ssock = socket(af, socktype) # socket to connect to server
         self.forwarders = forwarders = set()
         print(f"New connection #{connIndex} from {caddr}")
         sockNames[csock] = f"C{connIndex}:ToClient"
@@ -104,7 +108,11 @@ class Conn:
     def fwdDone(self, forwarder):
         forwarders = self.forwarders
         forwarders.remove(forwarder)
-        print(f"Forwarder {sockNames[forwarder.inSock]} ==> {sockNames[forwarder.outSock]} from connection {self.connIndex} shutting down")
+        print(
+            f"Forwarder {sockNames[forwarder.inSock]} ==>",
+            f"{sockNames[forwarder.outSock]} from connection {self.connIndex}",
+            "shutting down",
+            )
         if len(forwarders) == 0:
             self.die()
 
@@ -124,7 +132,8 @@ class Conn:
 
 
 class Listener:
-    def __init__(self, bindaddr, saddr, addrFamily=AF_INET, socktype=SOCK_STREAM):  # saddr is address of server
+    def __init__(self, bindaddr, saddr, addrFamily=AF_INET,
+                 socktype=SOCK_STREAM):  # saddr is address of server
         self.bindaddr, self.saddr = bindaddr, saddr
         self.addrFamily, self.socktype = addrFamily, socktype
         self.lsock = lsock = socket(addrFamily, socktype)
@@ -137,7 +146,7 @@ class Listener:
     def doRecv(self):
         try:
             csock, caddr = self.lsock.accept()  # socket connected to client
-            conn = Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
+            Conn(csock, caddr, self.addrFamily, self.socktype, self.saddr)
         except:
             print("Weird, listener readable but can't accept!")
             traceback.print_exc(file=sys.stdout)
@@ -176,10 +185,13 @@ while 1:
                 sock = fwd.checkWrite()
                 if (sock):
                     wmap[sock] = fwd
-    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()), 60)
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()),
+                              list(xmap.keys()), 60)
     # print "select r=%s, w=%s, x=%s" %
     if debug:
-        print([repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]])
+        print(
+            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            )
     for sock in rset:
         rmap[sock].doRecv()
     for sock in wset:

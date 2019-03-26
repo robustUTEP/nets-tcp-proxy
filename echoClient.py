@@ -140,10 +140,21 @@ while len(liveClients):
             wmap[sock] = client
         xmap[client.ssock] = client
     if debug:
-        print("select params (r,w,x):", [repr([sockNames[s] for s in sset]) for sset in [list(rmap.keys()), list(wmap.keys()), list(xmap.keys())]])
-    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()), list(xmap.keys()), 60)
+        print(
+            "select params (r,w,x):",
+            [repr([sockNames[s] for s in sset]) for sset in [
+                list(rmap.keys()),
+                list(wmap.keys()),
+                list(xmap.keys()),
+                ]],
+            )
+    rset, wset, xset = select(list(rmap.keys()), list(wmap.keys()),
+                              list(xmap.keys()), 60)
     if debug:
-        print("select returned (r,w,x):", [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]])
+        print(
+            "select returned (r,w,x):",
+            [repr([sockNames[s] for s in sset]) for sset in [rset, wset, xset]]
+            )
     for sock in xset:
         xmap[sock].doErr()
     for sock in rset:
@@ -155,7 +166,10 @@ while len(liveClients):
 numFailed = 0
 for client in deadClients:
     err = client.error
-    print(f"Client {client.clientIndex} Succeeded={not err}, Bytes sent={client.numSent}, rec'd={client.numRecv}")
+    print(
+        f"Client {client.clientIndex} Succeeded={not err},",
+        f"Bytes sent={client.numSent}, rec'd={client.numRecv}",
+        )
     if err:
         numFailed += 1
 print(f"{numFailed} Clients failed.")
